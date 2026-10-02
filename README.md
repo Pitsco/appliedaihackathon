@@ -10,7 +10,7 @@ You need Node 22.13 or newer. There is no build step.
 
 ```bash
 npm install
-cp .env.example .env     # add CLIO_ACCESS_TOKEN and ANTHROPIC_API_KEY
+cp .env.example .env     # add CLIO_ACCESS_TOKEN and ANTHROPIC_API_KEY or OPENAI_API_KEY
 npm run doctor           # checks every Clio request and the AI key, read-only
 npm start                # http://localhost:3000
 ```

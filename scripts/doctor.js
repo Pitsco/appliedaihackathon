@@ -55,9 +55,9 @@ if (!clio.clioConfigured()) {
   }
 }
 
-console.log(`\nAI (${config.ai.baseUrl})`);
+console.log(`\nAI (${config.ai.provider}, ${config.ai.baseUrl})`);
 if (!aiConfigured()) {
-  bad('No API key', 'Set ANTHROPIC_API_KEY in .env. Without it the app still shows what Clio returns, but nothing is digested.');
+  bad('No API key', 'Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env. Without it the app still shows what Clio returns, but nothing is digested.');
 } else {
   // Three tiny requests, one for each shape the digest relies on. They cost a fraction of a cent.
   const { callTool } = await import('../src/llm.js');

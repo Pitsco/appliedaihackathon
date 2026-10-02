@@ -308,7 +308,7 @@ function footer(m) {
 
 function banners(m, status) {
   const out = [];
-  if (!m.aiConfigured) out.push('<div class="banner banner-warn">No AI key is set, so nothing has been digested. Add ANTHROPIC_API_KEY to .env, restart, and sync. Everything below comes straight from Clio.</div>');
+  if (!m.aiConfigured) out.push('<div class="banner banner-warn">No AI key is set, so nothing has been digested. Add ANTHROPIC_API_KEY or OPENAI_API_KEY to .env, restart, and sync. Everything below comes straight from Clio.</div>');
   else if (!m.hasAi) out.push('<div class="banner banner-warn">This matter has been pulled from Clio but not digested yet. Press “Sync from Clio”.</div>');
   if (m.partial) out.push('<div class="banner banner-info">First brief from notes, emails, tasks and expenses. The documents are still being read and the brief will be rewritten when they are done.</div>');
   if (status?.error && !status.running) out.push(`<div class="banner banner-bad">The last sync stopped: ${esc(status.error)}</div>`);

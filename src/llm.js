@@ -36,13 +36,56 @@ const release = () => {
 let pausedUntil = 0;
 const backoff = (attempt) => Math.min(60_000, 2000 * 2 ** attempt) + Math.floor(Math.random() * 800);
 
+// --- OpenAI: the same call, translated. Anthropic's request shape is the app's native one. ---
+const openai = () => config.ai.provider === 'openai';
+
+function openaiPart(block) {
+  if (block.type === 'text') return { type: 'text', text: block.text };
+  if (block.type === 'document') return { type: 'file', file: { filename: 'pages.pdf', file_data: `data:${block.source.media_type};base64,${block.source.data}` } };
+  if (block.type === 'image') return { type: 'image_url', image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` } };
+  return { type: 'text', text: '' };
+}
+
+function openaiBody({ model, system, content, tool, tools, maxTokens }) {
+  const systemText = typeof system === 'string' ? system : (system || []).map((b) => b.text).join('\n\n');
+  const fn = (t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } });
+  return {
+    model,
+    max_completion_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: systemText },
+      { role: 'user', content: typeof content === 'string' ? content : content.map(openaiPart) },
+    ],
+    tools: (tools || [tool]).map(fn),
+    tool_choice: { type: 'function', function: { name: tool.name } },
+  };
+}
+
+/** Bring an OpenAI answer into the shape the rest of this file reads. */
+function fromOpenai(json) {
+  const choice = json?.choices?.[0];
+  const call = choice?.message?.tool_calls?.[0]?.function;
+  let input = null;
+  try {
+    input = call ? JSON.parse(call.arguments) : null;
+  } catch {
+    input = null;
+  }
+  const cached = json?.usage?.prompt_tokens_details?.cached_tokens || 0;
+  return {
+    content: input ? [{ type: 'tool_use', input }] : [],
+    stop_reason: choice?.finish_reason === 'length' ? 'max_tokens' : choice?.finish_reason,
+    usage: json?.usage ? { input_tokens: (json.usage.prompt_tokens || 0) - cached, cache_read_input_tokens: cached, output_tokens: json.usage.completion_tokens || 0 } : null,
+  };
+}
+
 function record({ step, model, usage, started, ok, error }) {
   const fresh = usage?.input_tokens || 0;
   const cacheWrite = usage?.cache_creation_input_tokens || 0;
   const cacheRead = usage?.cache_read_input_tokens || 0;
   const output = usage?.output_tokens || 0;
   // Cached input is billed differently: writing a cache entry costs a quarter more, reading one a tenth.
-  const billable = fresh + cacheWrite * 1.25 + cacheRead * 0.1;
+  const billable = fresh + cacheWrite * 1.25 + cacheRead * (openai() ? 0.25 : 0.1);
   run(
     'INSERT INTO llm_calls (run_id, matter_id, step, model, input_tokens, output_tokens, cost_usd, duration_ms, ok, error, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
     context.runId, context.matterId, step, model, fresh + cacheWrite + cacheRead, output, costOf(model, billable, output), Date.now() - started, ok ? 1 : 0, error || null, now(),
@@ -59,23 +102,24 @@ export async function callTool({ step, model, system, content, tool, tools = nul
   await acquire();
   const started = Date.now();
   try {
-    const body = JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: 'user', content }],
-      tools: tools || [tool],
-      tool_choice: { type: 'tool', name: tool.name },
-    });
+    const body = JSON.stringify(
+      openai()
+        ? openaiBody({ model, system, content, tool, tools, maxTokens })
+        : { model, max_tokens: maxTokens, system, messages: [{ role: 'user', content }], tools: tools || [tool], tool_choice: { type: 'tool', name: tool.name } },
+    );
+    const url = openai() ? `${config.ai.baseUrl}/v1/chat/completions` : `${config.ai.baseUrl}/v1/messages`;
+    const headers = openai()
+      ? { authorization: `Bearer ${config.ai.apiKey}`, 'content-type': 'application/json' }
+      : { 'x-api-key': config.ai.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' };
     let last = null;
     for (let attempt = 0; attempt < 10; attempt++) {
       const pause = pausedUntil - Date.now();
       if (pause > 0) await sleep(pause);
       let res;
       try {
-        res = await fetch(`${config.ai.baseUrl}/v1/messages`, {
+        res = await fetch(url, {
           method: 'POST',
-          headers: { 'x-api-key': config.ai.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          headers,
           body,
           signal: AbortSignal.timeout(285_000),
         });
@@ -92,7 +136,8 @@ export async function callTool({ step, model, system, content, tool, tools = nul
         await res.arrayBuffer().catch(() => {});
         continue;
       }
-      const json = await res.json().catch(() => null);
+      const raw = await res.json().catch(() => null);
+      const json = res.ok && openai() ? fromOpenai(raw) : raw;
       if (!res.ok) {
         const message = json?.error?.message || `HTTP ${res.status}`;
         record({ step, model, usage: null, started, ok: false, error: message });

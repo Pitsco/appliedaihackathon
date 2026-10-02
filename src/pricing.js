@@ -8,6 +8,13 @@ const LIST = [
   ['claude-sonnet-5', [2, 10]],
   ['claude-opus-5', [5, 25]],
   ['claude-sonnet-4', [3, 15]],
+  ['gpt-4.1-nano', [0.1, 0.4]],
+  ['gpt-4.1-mini', [0.4, 1.6]],
+  ['gpt-4.1', [2, 8]],
+  ['gpt-4o-mini', [0.15, 0.6]],
+  ['gpt-4o', [2.5, 10]],
+  ['gpt-5-mini', [0.25, 2]],
+  ['gpt-5', [1.25, 10]],
 ];
 
 let overrides = {};
