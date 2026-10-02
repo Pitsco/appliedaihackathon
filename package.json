@@ -1,0 +1,20 @@
+{
+  "name": "casebrief",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A ninety-second case digest for personal-injury firms and the medical providers treating their clients. Reads one matter live from Clio Manage, read-only.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "sync": "node --disable-warning=ExperimentalWarning scripts/sync.js",
+    "doctor": "node --disable-warning=ExperimentalWarning scripts/doctor.js"
+  },
+  "dependencies": {
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.2.108"
+  }
+}
