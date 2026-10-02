@@ -168,7 +168,7 @@ function conflicts(m) {
   return `<section class="card">
     <div class="card-top"><h2>Where the file disagrees with itself <span class="muted">· ${m.conflicts.length}</span></h2><span class="muted small">Resolve these before the next settlement discussion or deposition</span></div>
     <div class="conflicts">${m.conflicts
-      .map((x) => `<div class="conflict">${pill(cap(x.severity), TONE.severity[x.severity] || 'neutral')}<div><strong>${esc(x.title)}</strong>${x.by === 'check' ? ' <span class="tag">arithmetic check</span>' : ''}<p class="muted">${esc(x.detail)}</p>${chips(x.chips)}</div></div>`)
+      .map((x) => `<div class="conflict">${pill(cap(x.severity), TONE.severity[x.severity] || 'neutral')}<div><strong>${esc(x.title)}</strong>${x.by === 'check' ? ' <span class="tag">checked by code</span>' : ''}<p class="muted">${esc(x.detail)}</p>${chips(x.chips)}</div></div>`)
       .join('')}</div>
   </section>`;
 }
