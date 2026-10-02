@@ -103,11 +103,11 @@ function testRow(m) {
       ${chips(block.chips)}
     </article>`;
   };
+  const injury = (i) => `<li><div><strong>${esc(i.name)}</strong> ${i.status ? `<span class="tag">${esc(i.status)}</span>` : ''} ${chips(i.chips)}</div><p class="muted small">${esc(i.plain || '')}</p></li>`;
+  const first = m.injuries.slice(0, 3);
+  const rest = m.injuries.slice(3);
   const injuries = m.injuries.length
-    ? `<div class="injuries">${bodyDiagram(m.injuries)}<ol class="injury-list">${m.injuries
-        .slice(0, 6)
-        .map((i) => `<li><div><strong>${esc(i.name)}</strong> ${i.status ? `<span class="tag">${esc(i.status)}</span>` : ''} ${chips(i.chips)}</div><p class="muted small">${esc(i.plain || '')}</p></li>`)
-        .join('')}</ol></div>`
+    ? `<div class="injuries">${bodyDiagram(m.injuries)}<div><ol class="injury-list">${first.map(injury).join('')}</ol>${rest.length ? `<details class="more"><summary>${plural(rest.length, 'more injury', 'more injuries')}: ${rest.map((i) => esc(i.name)).join(', ')}</summary><ol class="injury-list" start="${first.length + 1}">${rest.map(injury).join('')}</ol></details>` : ''}</div></div>`
     : '';
   return `<div class="section-head"><h2>Does the case hold up?</h2><span class="muted small">${clear} of 3 checks clear · someone at fault, real injuries, money to recover</span></div>
   <section class="grid test-grid">
@@ -134,15 +134,16 @@ function moneyRow(m) {
 
 function attention(m) {
   const a = m.attention;
-  const soon = a.upcoming.slice(0, 6);
+  const soon = a.upcoming.slice(0, 4);
+  const waiting = (w) => `<div class="row row-quiet"><strong>${esc(w.what)}</strong><span class="small muted">${esc(w.who || '')}${w.since ? ` · since ${date(w.since)} (${w.days} days)` : ''}${w.attempts ? ` · asked ${w.attempts} times` : ''}</span>${chips(w.chips)}</div>`;
   return `<article class="card" id="attention">
     <h2>Needs attention</h2>
     <h4 class="group group-bad">Overdue · ${a.overdue.length}</h4>
     ${a.overdue.map((x) => `<button type="button" class="row row-bad" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small">Due ${date(x.date)} · ${x.days} days late${x.who ? ` · ${esc(x.who)}` : ''}</span></button>`).join('') || '<p class="muted small">Nothing is past due.</p>'}
     <h4 class="group group-warn">Coming up · ${a.upcoming.length}</h4>
     ${soon.map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('') || '<p class="muted small">Nothing scheduled.</p>'}
-    ${a.upcoming.length > soon.length ? `<p class="muted small">and ${a.upcoming.length - soon.length} more in the timeline below</p>` : ''}
-    ${a.waiting.length ? `<h4 class="group group-neutral">Waiting on others · ${a.waiting.length}</h4>${a.waiting.map((w) => `<div class="row row-quiet"><strong>${esc(w.what)}</strong><span class="small muted">${esc(w.who || '')}${w.since ? ` · since ${date(w.since)} (${w.days} days)` : ''}${w.attempts ? ` · asked ${w.attempts} times` : ''}</span>${chips(w.chips)}</div>`).join('')}` : ''}
+    ${a.upcoming.length > soon.length ? `<details class="more"><summary>${a.upcoming.length - soon.length} more coming up</summary>${a.upcoming.slice(4).map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('')}</details>` : ''}
+    ${a.waiting.length ? `<h4 class="group group-neutral">Waiting on others · ${a.waiting.length}</h4>${a.waiting.slice(0, 3).map(waiting).join('')}${a.waiting.length > 3 ? `<details class="more"><summary>${a.waiting.length - 3} more</summary>${a.waiting.slice(3).map(waiting).join('')}</details>` : ''}` : ''}
   </article>`;
 }
 

@@ -130,11 +130,15 @@ code { font-family: var(--mono); font-size: 12px; background: #eef0f3; padding: 
 .dot-minor circle { fill: #e39a2e; }
 .dot text { font: 700 8px var(--sans); fill: #fff; }
 .injury-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
+.more { margin-top: 6px; }
+.more summary { cursor: pointer; color: var(--accent); font-size: 12.5px; font-weight: 550; padding: 4px 0; }
+.more[open] summary { margin-bottom: 6px; }
 .injury-list li::marker { font-weight: 700; color: var(--bad); font-size: 12px; }
 
 /* money */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 10px; }
 .tile { display: flex; flex-direction: column; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.tile > .chip, .tile > .chips { align-self: flex-start; }
 .tile-big { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
 
 /* rows */

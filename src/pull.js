@@ -404,7 +404,7 @@ export async function pullMatter({ onProgress = () => {} } = {}) {
   }
 
   writeStructuredFacts(mid);
-  warnings.push(...clio.takeFieldNotes());
+  for (const note of clio.takeFieldNotes()) console.log(`Clio field note: ${note}`);
   setSetting('last_pull_at', seenAt);
   return { matterId: mid, counts, warnings };
 }
