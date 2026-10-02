@@ -18,8 +18,9 @@ const SENSITIVITY = ['strategy', 'valuation', 'liability', 'medical', 'billing',
 const DOC_TYPES = ['medical_record', 'medical_bill', 'imaging_report', 'operative_report', 'pleading', 'discovery', 'correspondence', 'expert_report', 'insurance', 'authorization', 'retainer', 'photo_id', 'employment', 'lien', 'police_report', 'photograph', 'other'];
 
 const THIN_PAGE = 150; // characters; below this a page is treated as a bare scan and read by vision
-const TEXT_BATCH_ITEMS = 12;
-const TEXT_BATCH_CHARS = 9000;
+// Batches are kept small so one answer always fits well inside the output limit of a new API account.
+const TEXT_BATCH_ITEMS = 8;
+const TEXT_BATCH_CHARS = 7000;
 const DOC_CHUNK_CHARS = 36000;
 const VISION_PAGES_PER_CALL = 12;
 
@@ -238,7 +239,7 @@ async function digestBatch(matterId, items, ctx, onDone) {
       system: SYSTEM,
       content: `${ctx.text}\n\nRecord the ${items.length} entries below. Return exactly one record per entry, using its ref exactly as given.\nFor a case expense entry (kind="activity"), always include exactly one fact of type "bill" (a medical provider's charges for treating the client) or "firm_expense" (a cost the firm paid to run the case).\n\n${items.map(renderEntry).join('\n\n')}`,
       tool: ENTRY_TOOL,
-      maxTokens: 12000,
+      maxTokens: 8000,
     });
     const byRef = new Map((Array.isArray(result.entries) ? result.entries : []).map((e) => [String(e?.ref || '').trim(), e]));
     for (const item of items) {

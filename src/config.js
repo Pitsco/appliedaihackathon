@@ -43,6 +43,9 @@ export const config = {
     concurrency: int('AI_CONCURRENCY', 4),
     // Safety valve for very large scans. Pages beyond this are reported as unread, never silently dropped.
     maxDocPages: int('MAX_DOC_PAGES', 200),
+    // Upper bound on the fact ledger sent to the brief writer, in characters (about four per token).
+    // New API accounts have a small per-minute input allowance. Raise this on a higher tier.
+    ledgerChars: int('LEDGER_CHARS', 64000),
   },
   share: {
     linkDays: int('SHARE_LINK_DAYS', 14),

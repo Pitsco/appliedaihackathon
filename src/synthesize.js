@@ -153,23 +153,45 @@ function describeSource(r) {
   }
 }
 
-export function ledger(matterId, people) {
-  const rows = all(
-    `SELECT f.*, s.kind, s.title AS s_title, s.date AS s_date, s.doc_label, s.meta AS s_meta
+// How much an attorney's brief depends on each kind of fact. Used only to decide what to
+// leave out when the ledger is too long for one request; nothing is ever left out of the database.
+const WEIGHT = { valuation: 10, coverage: 10, negotiation: 9, deadline: 10, liability: 9, risk: 9, incident: 9, court: 8, procedure: 8, injury: 8, lien: 8, wage_loss: 8, expert: 7, prior_history: 7, payer: 6, treatment: 6, field: 9, matter: 9, party: 7, discovery: 6, employment: 6, bill: 6, firm_expense: 5, records: 5, client_contact: 4, other: 2 };
+
+export function ledger(matterId, people, { types = null, budget = config.ai.ledgerChars } = {}) {
+  let rows = all(
+    `SELECT f.*, s.kind, s.title AS s_title, s.date AS s_date, s.doc_label, s.meta AS s_meta, s.importance AS s_importance
        FROM facts f JOIN source_items s ON s.id = f.source_id
       WHERE f.matter_id = ? AND s.removed_at IS NULL
       ORDER BY COALESCE(f.date, s.date, '0000'), f.id`,
     matterId,
   );
+  if (types) rows = rows.filter((r) => types.includes(r.type));
   const name = new Map(people.map((p) => [p.id, p.name]));
-  const lines = rows.map((r) => {
+  const line = (r) => {
     const parts = [`f${r.id}`, r.type, r.date || r.s_date || 'undated'];
     if (r.amount != null) parts.push(`$${Number(r.amount).toLocaleString('en-US')}`);
     if (r.status) parts.push(r.status);
     if (r.contact_id && name.has(r.contact_id)) parts.push(`re ${name.get(r.contact_id)} [${r.contact_id}]`);
     return `${parts.join(' · ')} — ${r.detail} (${describeSource(r)})`;
-  });
-  return { text: lines.join('\n'), ids: new Set(rows.map((r) => r.id)), count: rows.length };
+  };
+  let lines = rows.map((r) => ({ r, text: line(r) }));
+  const total = lines.reduce((a, l) => a + l.text.length + 1, 0);
+  let omitted = 0;
+  if (total > budget) {
+    // Keep the facts that matter most, then put them back in date order.
+    const score = (r) => (WEIGHT[r.type] ?? 3) * 10 + (r.s_importance ?? 40) / 10 + (r.origin === 'clio' ? 20 : 0);
+    const ranked = [...lines].sort((x, y) => score(y.r) - score(x.r));
+    const keep = new Set();
+    let used = 0;
+    for (const l of ranked) {
+      if (used + l.text.length + 1 > budget) continue;
+      used += l.text.length + 1;
+      keep.add(l.r.id);
+    }
+    omitted = lines.length - keep.size;
+    lines = lines.filter((l) => keep.has(l.r.id));
+  }
+  return { text: lines.map((l) => l.text).join('\n'), ids: new Set(lines.map((l) => l.r.id)), count: lines.length, omitted };
 }
 
 function entryList(matterId) {
@@ -297,7 +319,10 @@ export async function synthesize(matterId, { partial = false } = {}) {
   const rosterIds = new Set(ctx.people.map((p) => p.id));
   const stats = visitStats(matterId);
   const visitLines = [...stats.entries()].map(([id, v]) => `[${id}] ${v.count} visits documented, first ${v.first}, last ${v.last}${v.gaps.length ? `; gaps over 30 days: ${v.gaps.map((g) => `${g.from} to ${g.to} (${g.days} days)`).join(', ')}` : ''}`);
-  const shared = `${ctx.text}\n\n<ledger>\n${book.text}\n</ledger>\n\n<open_work>\n${openWork(matterId) || 'none'}\n</open_work>`;
+  const work = `<open_work>\n${openWork(matterId) || 'none'}\n</open_work>`;
+  const omitted = (b) => (b.omitted ? `\n(${b.omitted} lower-priority facts were left out of this ledger to keep it short. They remain in the file.)` : '');
+  // The provider table only needs the medical, billing and records side of the file.
+  const medical = ledger(matterId, ctx.people, { types: ['party', 'injury', 'procedure', 'treatment', 'bill', 'records', 'payer', 'lien', 'client_contact', 'expert', 'matter'], budget: Math.round(config.ai.ledgerChars * 0.6) });
   const partialNote = partial ? '\n\nNote: the documents are still being read. This first brief rests on notes, emails, tasks and expenses only.' : '';
 
   const [caseRaw, providerRaw] = await Promise.all([
@@ -305,24 +330,25 @@ export async function synthesize(matterId, { partial = false } = {}) {
       step: 'brief:case',
       model: config.ai.synthModel,
       system: SYSTEM,
-      content: `${shared}\n\n<entries>\n${entries.text}\n</entries>${partialNote}\n\nWrite the brief.`,
+      content: `${ctx.text}\n\n<ledger>\n${book.text}\n</ledger>${omitted(book)}\n\n${work}\n\n<entries>\n${entries.text}\n</entries>${partialNote}\n\nWrite the brief.`,
       tool: CASE_TOOL,
-      maxTokens: 12000,
+      maxTokens: 8000,
     }),
     callTool({
       step: 'brief:providers',
       model: config.ai.synthModel,
       system: SYSTEM,
-      content: `${shared}\n\n<visits_counted_from_records>\n${visitLines.join('\n') || 'none yet'}\n</visits_counted_from_records>${partialNote}\n\nWrite the provider table. Use the visit counts above for last visits where they are later than what the notes say.`,
+      content: `${ctx.text}\n\n<ledger>\n${medical.text}\n</ledger>${omitted(medical)}\n\n${work}\n\n<visits_counted_from_records>\n${visitLines.join('\n') || 'none yet'}\n</visits_counted_from_records>${partialNote}\n\nWrite the provider table. Use the visit counts above for last visits where they are later than what the notes say.`,
       tool: PROVIDER_TOOL,
-      maxTokens: 6000,
+      maxTokens: 5000,
     }),
   ]);
 
   const brief = {
     case: cleanCase(caseRaw, book.ids, entries.refs),
-    providers: cleanProviders(providerRaw, book.ids, rosterIds),
+    providers: cleanProviders(providerRaw, medical.ids, rosterIds),
     facts_used: book.count,
+    facts_omitted: book.omitted,
   };
   run(
     'INSERT INTO briefs (matter_id, json, partial, generated_at, model) VALUES (?,?,?,?,?) ON CONFLICT (matter_id) DO UPDATE SET json = excluded.json, partial = excluded.partial, generated_at = excluded.generated_at, model = excluded.model',

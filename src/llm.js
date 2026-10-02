@@ -62,7 +62,7 @@ export async function callTool({ step, model, system, content, tool, maxTokens =
       tool_choice: { type: 'tool', name: tool.name },
     });
     let last = null;
-    for (let attempt = 0; attempt < 7; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const pause = pausedUntil - Date.now();
       if (pause > 0) await sleep(pause);
       let res;
