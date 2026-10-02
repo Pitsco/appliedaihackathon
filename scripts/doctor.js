@@ -59,18 +59,24 @@ console.log(`\nAI (${config.ai.baseUrl})`);
 if (!aiConfigured()) {
   bad('No API key', 'Set ANTHROPIC_API_KEY in .env. Without it the app still shows what Clio returns, but nothing is digested.');
 } else {
-  for (const model of new Set([config.ai.extractModel, config.ai.synthModel])) {
+  // Three tiny requests, one for each shape the digest relies on. They cost a fraction of a cent.
+  const { callTool } = await import('../src/llm.js');
+  const { PDFDocument, StandardFonts } = await import('pdf-lib');
+  const tool = (name) => ({ name, description: 'Report one word.', input_schema: { type: 'object', properties: { word: { type: ['string', 'null'] } }, required: ['word'] } });
+  const pdf = await PDFDocument.create();
+  pdf.addPage([320, 120]).drawText('Doctor test page', { x: 20, y: 70, size: 14, font: await pdf.embedFont(StandardFonts.Helvetica) });
+  const page = Buffer.from(await pdf.save()).toString('base64');
+  const checks = [
+    [`${config.ai.extractModel} answers through a tool`, () => callTool({ step: 'doctor', model: config.ai.extractModel, system: 'You are a connection test.', content: 'Call the tool with word set to "ok".', tool: tool('report'), maxTokens: 100 })],
+    [`${config.ai.extractModel} reads a PDF page`, () => callTool({ step: 'doctor', model: config.ai.extractModel, system: 'You are a connection test.', content: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: page } }, { type: 'text', text: 'Call the tool with word set to the first word printed on the page.' }], tool: tool('report'), maxTokens: 100 })],
+    [`${config.ai.synthModel} answers with a cached prompt and several tools`, () => callTool({ step: 'doctor', model: config.ai.synthModel, system: [{ type: 'text', text: 'You are a connection test.' }, { type: 'text', text: 'Case material would go here.', cache_control: { type: 'ephemeral' } }], content: 'Call the tool with word set to "ok".', tool: tool('report'), tools: [tool('report'), tool('other')], maxTokens: 100 })],
+  ];
+  for (const [label, fn] of checks) {
     try {
-      const res = await fetch(`${config.ai.baseUrl}/v1/messages`, {
-        method: 'POST',
-        headers: { 'x-api-key': config.ai.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model, max_tokens: 8, messages: [{ role: 'user', content: 'Reply with the word ok.' }] }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (res.ok) ok(model, 'responds');
-      else bad(model, `${res.status} ${body?.error?.message || ''}`);
+      const out = await fn();
+      ok(label, out?.word ? `said "${out.word}"` : '');
     } catch (err) {
-      bad(model, err.message);
+      bad(label, err.message);
     }
   }
 }
