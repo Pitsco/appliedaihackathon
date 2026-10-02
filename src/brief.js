@@ -96,10 +96,11 @@ export async function clientPhoto(matterId) {
   const box = parseJson(doc.extra, {}).portrait;
   let crop = null;
   if (box && cached.width && cached.height) {
-    // Square crop around the face the model located, in image pixels, with a little air around it.
+    // Square crop around the face the model located. Models place the box only roughly, so the crop is
+    // generous: a wider view of the ID that surely holds the face beats a tight one that misses it.
     const W = cached.width;
     const H = cached.height;
-    const side = Math.min(W, H, Math.max(box.w * W, box.h * H) * 1.15);
+    const side = Math.min(W, H, Math.max(box.w * W, box.h * H) * 2.4);
     const left = Math.max(0, Math.min(W - side, (box.x + box.w / 2) * W - side / 2));
     const top = Math.max(0, Math.min(H - side, (box.y + box.h / 2) * H - side / 2));
     crop = {
