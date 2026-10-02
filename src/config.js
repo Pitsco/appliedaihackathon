@@ -31,7 +31,7 @@ export const config = {
     accessToken: env('CLIO_ACCESS_TOKEN'),
     clientId: env('CLIO_CLIENT_ID'),
     clientSecret: env('CLIO_CLIENT_SECRET'),
-    redirectUri: env('CLIO_REDIRECT_URI', `http://localhost:${port}/clio/callback`),
+    redirectUri: env('CLIO_REDIRECT_URI', `http://127.0.0.1:${port}/clio/callback`),
     matterId: env('CLIO_MATTER_ID'),
     matterQuery: env('CLIO_MATTER_QUERY'),
   },

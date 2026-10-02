@@ -24,7 +24,7 @@ Open the page and press **Pull the matter from Clio**. A first brief appears onc
 | `npm run sync` | Runs the same sync as the button, with progress in the terminal |
 | `npm run sync -- --rebuild` | Reads every item again (use after changing a prompt) |
 
-No Clio token yet? Create an app in Clio's developer portal, put its key and secret in `.env` as `CLIO_CLIENT_ID` and `CLIO_CLIENT_SECRET`, add `http://localhost:3000/clio/callback` as a redirect URI, and open `/clio/login`.
+No Clio token yet? Create an app in Clio's developer portal, put its key and secret in `.env` as `CLIO_CLIENT_ID` and `CLIO_CLIENT_SECRET`, add `http://127.0.0.1:3000/clio/callback` as a redirect URI, and open `/clio/login`.
 
 ## What the attorney sees
 
