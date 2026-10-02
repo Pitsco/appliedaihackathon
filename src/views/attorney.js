@@ -27,7 +27,7 @@ function deadlineBox(d, next) {
     if (d.state === 'suit_filed') {
       t = 'good';
       big = d.date ? date(d.date, 'always') : 'Filed';
-      sub = 'Filing deadline met';
+      sub = '';
     } else if (d.state === 'expired') {
       t = 'bad';
       big = d.date ? date(d.date, 'always') : 'Expired';
@@ -45,8 +45,7 @@ function deadlineBox(d, next) {
   return `<div class="stat stat-${t}" title="${esc(d?.detail || '')}">
     <span class="stat-label">${esc(label)}</span>
     <span class="stat-big">${big}</span>
-    <span class="stat-sub">${esc(sub)} ${chips(d?.chips)}</span>
-    ${next ? `<span class="stat-sub">Next: ${date(next.date)} · ${esc(next.label || '')}</span>` : ''}
+    <span class="stat-sub">${esc(sub)} ${chips(d?.chips?.slice(0, 1))}</span>
   </div>`;
 }
 
@@ -57,7 +56,7 @@ function header(m) {
   const avatar = photo
     ? `<button type="button" class="avatar ${photo.crop ? 'avatar-photo' : 'avatar-card'}" data-source="${photo.source}" title="Open the photo ID" style="background-image:url('${photo.url}');${photo.crop ? `background-size:${photo.crop.size};background-position:${photo.crop.position}` : ''}"></button>`
     : `<div class="avatar">${esc(initials)}</div>`;
-  const facts = [m.caseType && cap(m.caseType), m.incident?.location, m.incident?.date && `Date of loss ${date(m.incident.date, 'always')}`, m.caseAgeMonths != null && `Case age ${m.caseAgeMonths} months`].filter(Boolean);
+  const facts = [m.caseType && cap(m.caseType), m.incident?.date && date(m.incident.date, 'always'), m.caseAgeMonths != null && `${m.caseAgeMonths} months old`].filter(Boolean);
   const lc = m.lastContact.spoken || m.lastContact.any;
   const lcTone = !lc ? 'neutral' : lc.days > 30 ? 'bad' : lc.days > 14 ? 'warn' : 'neutral';
   const od = m.attention.overdue.length;
@@ -70,7 +69,7 @@ function header(m) {
         ${avatar}
         <div>
           <h1>${esc(m.client?.name || m.matter.description || 'Matter')}${m.clientAge != null ? `<span class="age">, ${m.clientAge}</span>` : ''}</h1>
-          <p class="muted">${facts.map((f) => (typeof f === 'string' ? esc(f) : f)).join(' · ')} ${chips(m.incident?.chips)}</p>
+          <p class="muted">${facts.map(esc).join(' · ')}</p>
         </div>
       </div>
       <div class="head-stats">
@@ -79,7 +78,6 @@ function header(m) {
           <span class="stat-label">Last client contact</span>
           <span class="stat-big">${lc ? esc(cap(ago(lc.days))) : 'None logged'}</span>
           <span class="stat-sub">${lc ? `${esc(lc.how)} ${chip(lc.chip)}` : ''}</span>
-          ${m.lastContact.spoken && m.lastContact.any && m.lastContact.any.date > m.lastContact.spoken.date ? `<span class="stat-sub">Last email ${date(m.lastContact.any.date)}</span>` : ''}
         </div>
         <a class="stat stat-${od ? 'bad' : 'good'} stat-link" href="#attention">
           <span class="stat-label">Overdue</span>
@@ -126,9 +124,11 @@ function glance(m) {
   if (!m.test) return '';
   const { coverage, damages, fault } = m.test;
   const $ = m.money;
-  const injury = (i) => `<li><strong>${esc(i.name)}</strong> ${i.status ? `<span class="tag">${esc(i.status)}</span>` : ''} ${chips(i.chips?.slice(0, 1))}</li>`;
-  const first = m.injuries.slice(0, 4);
-  const rest = m.injuries.slice(4);
+  // The first screen names the injury in a few words; the full medical wording is in the section below.
+  const short = (t) => String(t || '').split(/,|;| and /)[0].trim();
+  const injury = (i) => `<li><strong title="${esc(i.name)}">${esc(short(i.name))}</strong> ${i.status ? `<span class="tag">${esc(short(i.status))}</span>` : ''} ${chips(i.chips?.slice(0, 1))}</li>`;
+  const first = m.injuries.slice(0, 3);
+  const rest = m.injuries.slice(3);
   const [dText, dTone] = tone('damages', damages.status);
   const [cText, cTone] = tone('coverage', coverage.status);
   const [fText, fTone] = tone('fault', fault.status);
@@ -137,14 +137,14 @@ function glance(m) {
   return `<section class="grid glance">
     <article class="card">
       <div class="test-top"><span class="eyebrow">Injuries</span>${pill(dText, dTone)}</div>
-      <div class="injuries">${bodyDiagram(m.injuries)}<div><ol class="injury-list tight">${first.map(injury).join('')}</ol>${rest.length ? `<details class="more"><summary>${rest.length} more</summary><ol class="injury-list tight" start="${first.length + 1}">${rest.map(injury).join('')}</ol></details>` : ''}</div></div>
+      <div class="injuries">${bodyDiagram(m.injuries)}<div><ol class="injury-list tight">${first.map(injury).join('')}</ol>${rest.length ? `<details class="more"><summary>+${rest.length}</summary><ol class="injury-list tight" start="${first.length + 1}">${rest.map(injury).join('')}</ol></details>` : ''}</div></div>
     </article>
     <article class="card">
       <div class="test-top"><span class="eyebrow">Who pays</span>${pill(cText, cTone)}</div>
-      ${m.payers.length ? `<p class="payer">${esc(m.payers[0].name)}</p><p class="muted small">${esc(m.payers[0].role || '')}${m.payers.length > 1 ? ` · and ${esc(m.payers.slice(1).map((p) => p.name).join(', '))}` : ''}</p>` : ''}
+      ${m.payers.length ? `<p class="payer">${esc(m.payers[0].name)}</p>` : ''}
       <p class="${m.payers.length ? 'small' : 'payer'}">${esc(coverage.headline || '')} ${chips(coverage.chips?.slice(0, 1))}</p>
       <div class="test-top fault-line"><span class="eyebrow">Fault</span>${pill(fText, fTone)}</div>
-      <p class="small">${esc(fault.headline || '')} ${chips(fault.chips?.slice(0, 1))}</p>
+      
     </article>
     <article class="card">
       <div class="test-top"><span class="eyebrow">Money</span></div>
@@ -180,31 +180,31 @@ function moneyRow(m) {
 
 function attention(m) {
   const a = m.attention;
-  const soon = a.upcoming.slice(0, 2);
+  const soon = a.upcoming.slice(0, 1);
   const waiting = (w) => `<div class="row row-quiet"><strong>${esc(w.what)}</strong><span class="small muted">${esc(w.who || '')}${w.since ? ` · since ${date(w.since)} (${w.days} days)` : ''}${w.attempts ? ` · asked ${w.attempts} times` : ''}</span>${chips(w.chips)}</div>`;
   return `<article class="card" id="attention">
     <h2>Needs attention</h2>
     <h4 class="group group-bad">Overdue · ${a.overdue.length}</h4>
-    ${a.overdue.map((x) => `<button type="button" class="row row-bad" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small">Due ${date(x.date)} · ${x.days} days late${x.who ? ` · ${esc(x.who)}` : ''}</span></button>`).join('') || '<p class="muted small">Nothing is past due.</p>'}
+    ${a.overdue.slice(0, 1).map((x) => `<button type="button" class="row row-bad" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small">Due ${date(x.date)} · ${x.days} days late${x.who ? ` · ${esc(x.who)}` : ''}</span></button>`).join('') || '<p class="muted small">Nothing is past due.</p>'}
     <h4 class="group group-warn">Coming up · ${a.upcoming.length}</h4>
     ${soon.map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('') || '<p class="muted small">Nothing scheduled.</p>'}
-    ${a.upcoming.length > soon.length ? `<details class="more"><summary>${a.upcoming.length - soon.length} more coming up</summary>${a.upcoming.slice(2).map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('')}</details>` : ''}
+    ${a.upcoming.length > soon.length ? `<details class="more"><summary>All tasks</summary>${a.overdue.slice(1).map((x) => `<button type="button" class="row row-bad" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small">Due ${date(x.date)} · ${x.days} days late</span></button>`).join('')}${a.upcoming.slice(1).map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('')}</details>` : ''}
     ${a.waiting.length ? `<h4 class="group group-neutral">Waiting on others · ${a.waiting.length}</h4><details class="more"><summary>Show</summary>${a.waiting.map(waiting).join('')}</details>` : ''}
   </article>`;
 }
 
 function changes(m) {
   const ch = m.changes;
-  const shown = ch.items.slice(0, 4);
+  const shown = ch.items.slice(0, 3);
   const option = (v, label) => `<option value="${v}"${ch.choice === v ? ' selected' : ''}>${label}</option>`;
   const tag = { new: ['New', 'accent'], changed: ['Edited', 'warn'], late: ['Late', 'bad'] };
   const changeRow = (x) => `<button type="button" class="change" data-source="${x.chip.source}">${pill(tag[x.tag][0], tag[x.tag][1])}<span class="change-text">${esc(x.text)}</span><span class="muted small">${date(x.date)}</span></button>`;
   return `<article class="card">
     <div class="card-top"><h2>${esc(ch.label)} <span class="muted">· ${plural(ch.items.length, 'change')}</span></h2>
       <select id="since" class="select" aria-label="Period">${option('last', 'Since last opened')}${option('7d', 'Last 7 days')}${option('30d', 'Last 30 days')}${option('90d', 'Last 90 days')}</select></div>
-    ${ch.firstVisit ? '<p class="muted small">No earlier visit on record, so this shows the last 14 days.</p>' : ''}
+    
     ${shown.map(changeRow).join('') || '<p class="muted">Nothing has changed in this period.</p>'}
-    ${ch.items.length > shown.length ? `<details class="more"><summary>${ch.items.length - shown.length} more</summary>${ch.items.slice(4).map(changeRow).join('')}</details>` : ''}
+    ${ch.items.length > shown.length ? `<details class="more"><summary>${ch.items.length - shown.length} more</summary>${ch.items.slice(3).map(changeRow).join('')}</details>` : ''}
   </article>`;
 }
 
@@ -305,10 +305,10 @@ function visitStrip(m) {
 function inBrief(m) {
   if (!m.pitch.length) return m.status ? `<p class="status"><strong>${esc(m.status.line)}</strong> ${chips(m.status.chips)}</p>` : '';
   const say = (list) => list.map((p) => `${esc(p.text)} ${chips(p.chips?.slice(0, 1))}`).join(' ');
-  const rest = m.pitch.slice(2);
+  const rest = m.pitch.slice(1);
   return `<div class="inbrief">
-    <p class="pitch">${say(m.pitch.slice(0, 2))}</p>
-    ${rest.length ? `<details class="more"><summary>Read the full brief · ${rest.length} more sentences</summary><p class="pitch">${say(rest)}</p></details>` : ''}
+    <p class="pitch">${esc(m.pitch[0].text)}</p>
+    ${rest.length ? `<details class="more"><summary>Full brief</summary><p class="pitch">${say(rest)}</p></details>` : ''}
   </div>`;
 }
 

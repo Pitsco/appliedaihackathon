@@ -338,3 +338,13 @@ body.pv { background: var(--bg); }
   .body { display: none; }
 }
 #attention .row strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+
+/* First screen: as few words as possible. */
+.track li:not(.track-current) .track-label { display: none; }
+.fold > summary .muted { display: none; }
+.change-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inbrief .pitch { display: inline; }
+.inbrief .more { display: inline-block; margin: 0 0 0 8px; }
+.inbrief .more[open] { display: block; margin: 6px 0 0; }
+.inbrief .more[open] .pitch { display: block; }
+#attention .row span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
