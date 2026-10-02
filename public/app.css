@@ -90,7 +90,7 @@ code { font-family: var(--mono); font-size: 12px; background: #f1efea; padding: 
 
 /* source chips */
 .chips { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
-.chip { font: 500 11px/1 var(--sans); color: var(--accent); background: transparent; border: 1px solid var(--accent-line); border-radius: 3px; padding: 3px 6px; cursor: pointer; white-space: nowrap; }
+.chip { font: 500 11px/1 var(--sans); color: var(--accent); background: transparent; border: 1px solid var(--accent-line); border-radius: 3px; padding: 3px 6px; cursor: pointer; white-space: nowrap; text-transform: lowercase; }
 .chip:hover { background: var(--accent-bg); border-color: var(--accent); }
 .chip-static { cursor: default; }
 
