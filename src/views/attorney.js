@@ -2,7 +2,7 @@
 // the filing deadline, then fault / damages / coverage, then money, then what to do.
 import { esc, usd, usdShort, date, ago, until, chip, chips, listChip, pill, plural, cap, bodyDiagram, KIND_LABEL } from './ui.js';
 import { page } from './layout.js';
-import { daysBetween } from '../util.js';
+import { daysBetween, today } from '../util.js';
 
 const TONE = {
   fault: { clear: ['Clear', 'good'], contested: ['Contested', 'warn'], weak: ['Weak', 'bad'], unknown: ['Not established', 'neutral'] },
@@ -86,6 +86,7 @@ function header(m) {
         </a>
       </div>
     </div>
+    ${inBrief(m)}
     ${track}
     ${m.status ? `<p class="status"><strong>${esc(m.status.line)}</strong> <span class="muted">${esc(m.status.detail || '')}</span> ${chips(m.status.chips)}</p>` : ''}
   </section>`;
@@ -253,12 +254,23 @@ function visitStrip(m) {
   </div>`;
 }
 
-function pitch(m) {
-  if (!m.pitch.length && !m.money.offers.length) return '';
-  return `<section class="grid two">
-    <article class="card"><h2>The pitch <span class="muted">· 60 seconds</span></h2><p class="pitch">${m.pitch.map((p) => `${esc(p.text)} ${chips(p.chips)}`).join(' ')}</p></article>
-    <article class="card"><h2>Demands and offers</h2>${m.money.offers.map((o) => `<div class="row row-quiet"><strong>${o.amount != null ? `${usd(o.amount)} · ` : ''}${esc(o.from || '')}</strong><span class="small muted">${o.date ? date(o.date, 'always') : ''}</span><p class="muted small">${esc(o.summary)}</p>${chips(o.chips)}</div>`).join('') || '<p class="muted">No demand or offer in the file.</p>'}</article>
-  </section>`;
+/**
+ * The whole case in one paragraph, at the top, for someone who has never opened the file or needs a refresher.
+ * Open on a first visit or after a week away; folded to one line for someone who was here recently.
+ */
+function inBrief(m) {
+  if (!m.pitch.length) return '';
+  const last = m.changes?.previous;
+  const open = !last || daysBetween(last.slice(0, 10), today()) >= 7;
+  return `<details class="inbrief"${open ? ' open' : ''}>
+    <summary><span class="eyebrow">Case in brief</span><span class="muted small inbrief-hint">${m.pitch.length} sentences · about a minute to read</span></summary>
+    <p class="pitch">${m.pitch.map((p) => `${esc(p.text)} ${chips(p.chips)}`).join(' ')}</p>
+  </details>`;
+}
+
+function offers(m) {
+  if (!m.money.offers.length) return '';
+  return `<article class="card"><h2>Demands and offers</h2>${m.money.offers.map((o) => `<div class="row row-quiet"><strong>${o.amount != null ? `${usd(o.amount)} · ` : ''}${esc(o.from || '')}</strong><span class="small muted">${o.date ? date(o.date, 'always') : ''}</span><p class="muted small">${esc(o.summary)}</p>${chips(o.chips)}</div>`).join('')}</article>`;
 }
 
 function entries(m) {
@@ -312,7 +324,7 @@ export function attorneyPage(m, status) {
   <section class="grid two">${attention(m)}${changes(m)}</section>
   ${conflicts(m)}
   ${providers(m)}
-  ${pitch(m)}
+  ${offers(m)}
   ${entries(m)}
   ${footer(m)}`;
   return page({ title: m.client?.name || 'Brief', active: 'brief', body, model: m, status });

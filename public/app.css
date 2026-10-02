@@ -204,6 +204,13 @@ button.row-bad:hover { background: var(--bad-bg); }
 .key-gap { background: #e6cf99; }
 .key-dark { background: rgba(154, 36, 24, 0.12); border: 1px dashed rgba(154, 36, 24, 0.5); }
 .pitch { font: 16px/1.75 var(--serif); max-width: 78ch; }
+.inbrief { border-left: 3px solid var(--navy); background: #faf9f6; padding: 12px 18px; }
+.inbrief summary { cursor: pointer; display: flex; align-items: baseline; gap: 12px; list-style: none; }
+.inbrief summary::-webkit-details-marker { display: none; }
+.inbrief summary::after { content: "Show"; margin-left: auto; font-size: 12.5px; font-weight: 550; color: var(--accent); }
+.inbrief[open] summary::after { content: "Hide"; }
+.inbrief[open] summary { margin-bottom: 8px; }
+.inbrief .pitch { max-width: 96ch; }
 
 /* entries */
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
