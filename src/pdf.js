@@ -1,6 +1,20 @@
 // PDF helpers. Text comes out page by page so every fact can point at the page it was found on.
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { PDFDocument, PDFName, PDFRawStream, PDFArray } from 'pdf-lib';
+
+// pdf.js wants a few browser classes to exist when it loads, even though reading text never
+// uses them. Its optional native canvas package normally supplies them. Where that package
+// did not install, pdf.js would crash on import, so we supply inert stand-ins first.
+for (const name of ['DOMMatrix', 'Path2D', 'ImageData']) {
+  if (!(name in globalThis)) globalThis[name] = class {};
+}
+const quiet = { log: console.log, warn: console.warn };
+console.log = console.warn = () => {}; // pdf.js prints canvas warnings while loading
+let getDocument;
+try {
+  ({ getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs'));
+} finally {
+  Object.assign(console, quiet);
+}
 
 /** Text of every page, in order. A page with no text layer (a bare scan) comes back as ''. */
 export async function pdfPageTexts(buffer) {
