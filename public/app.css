@@ -100,6 +100,7 @@ code { font-family: var(--mono); font-size: 12px; background: #eef0f3; padding: 
 .head-who p { margin-top: 3px; }
 .avatar { flex: none; width: 64px; height: 64px; border-radius: 50%; background: #dfe6ff; color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 22px; border: 0; background-repeat: no-repeat; }
 .avatar-photo { cursor: pointer; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line-strong); }
+.avatar-card { width: 96px; height: 64px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; box-shadow: 0 0 0 1px var(--line-strong); }
 .head-stats { display: grid; grid-template-columns: minmax(170px, 1.25fr) minmax(150px, 1fr) minmax(96px, 0.6fr); gap: 10px; flex: 1 1 480px; }
 .stat { display: flex; flex-direction: column; gap: 2px; border-radius: 11px; padding: 9px 12px; background: #f5f6f8; color: var(--ink); text-decoration: none; }
 .stat-label { font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.85; }
@@ -278,7 +279,8 @@ body.pv { background: #f4f5f7; }
 
 @media (max-width: 1000px) {
   .grid.two, .test-grid, .share { grid-template-columns: minmax(0, 1fr); }
-  .head-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .avatar-card { width: 96px; height: 64px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; box-shadow: 0 0 0 1px var(--line-strong); }
+.head-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tabs { margin: 0; }
   .top-right .muted { display: none; }
   .plist-card, .preview { position: static; }
@@ -287,7 +289,8 @@ body.pv { background: #f4f5f7; }
 }
 @media (max-width: 620px) {
   .top-in { flex-wrap: wrap; }
-  .head-stats { grid-template-columns: minmax(0, 1fr); }
+  .avatar-card { width: 96px; height: 64px; border-radius: 10px; background-size: cover; background-position: center; cursor: pointer; box-shadow: 0 0 0 1px var(--line-strong); }
+.head-stats { grid-template-columns: minmax(0, 1fr); }
   .injuries { grid-template-columns: minmax(0, 1fr); }
   .body { display: none; }
 }

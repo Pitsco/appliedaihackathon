@@ -130,6 +130,12 @@ export function matterContext(matterId) {
   };
 }
 
+/** A roster id however the model wrote it: 123, "123", "[123]". */
+export const rosterId = (v, valid) => {
+  const id = String(v ?? '').replace(/[^0-9A-Za-z_-]/g, '');
+  return id && valid.has(id) ? id : null;
+};
+
 const text = (v, max) => {
   const s = typeof v === 'string' ? v.trim() : '';
   return s ? truncate(s, max) : null;
@@ -147,7 +153,7 @@ function cleanFact(f, rosterIds) {
     detail,
     date: /^\d{4}-\d{2}-\d{2}$/.test(String(f.date || '')) ? f.date : isoDate(f.date),
     amount: f.amount != null && Number.isFinite(amount) ? amount : null,
-    contact_id: f.contact_id != null && rosterIds.has(String(f.contact_id)) ? String(f.contact_id) : null,
+    contact_id: rosterId(f.contact_id, rosterIds),
     status: text(f.status, 40)?.toLowerCase() || null,
     quote: text(f.quote, 400),
     sensitivity: SENSITIVITY.includes(f.sensitivity) ? f.sensitivity : 'administrative',
@@ -179,7 +185,7 @@ function renderEntry(item) {
   if (item.kind === 'communication') head.push(`${meta.type === 'phone' ? 'Phone call' : 'Email'} from ${(meta.from || []).map((p) => p.name).join(', ') || 'unknown'} to ${(meta.to || []).map((p) => p.name).join(', ') || 'unknown'}`);
   if (item.kind === 'task') head.push(`Task, status ${meta.status || 'unknown'}, due ${item.date || 'no date'}${meta.assignee ? `, assigned to ${meta.assignee}` : ''}`);
   if (item.kind === 'calendar') head.push(`Calendar entry on ${item.date || 'no date'}`);
-  if (item.kind === 'activity') head.push(`Case expense entry of $${Number(meta.amount || 0).toFixed(2)} (${meta.non_billable ? 'marked non-billable' : 'marked billable to the matter'})`);
+  if (item.kind === 'activity') head.push(`${/time/i.test(meta.type || '') ? 'Time entry' : 'Case expense entry'} of $${Number(meta.amount || 0).toFixed(2)} (${meta.non_billable ? 'marked non-billable' : 'marked billable to the matter'})`);
   if (item.kind === 'note' && meta.author) head.push(`Note by ${meta.author}`);
   return `<entry ${attrs}>\n${head.length ? `${head.join('. ')}.\n` : ''}Subject: ${item.title || ''}\n\n${item.body || ''}\n</entry>`;
 }
@@ -393,10 +399,10 @@ export async function digestDocument(matterId, item, ctx = matterContext(matterI
   const first = good[0]?.value;
   const head = first ? cleanEntry(first) : null;
   const importance = good.reduce((m, r) => Math.max(m, clamp(Number.parseInt(r.value.importance, 10) || 0, 0, 100)), 0);
-  const providerId = good.map((r) => r.value.provider_contact_id).find((id) => id != null && rosterIds.has(String(id)));
+  const providerId = good.map((r) => rosterId(r.value.provider_contact_id, rosterIds)).find(Boolean);
   const extra = {
     ...parseJson(item.extra, {}),
-    provider_contact_id: providerId != null ? String(providerId) : null,
+    provider_contact_id: providerId || null,
     visits: [...visits.entries()].map(([date, page]) => ({ date, page })).sort((a, b) => a.date.localeCompare(b.date)),
     portrait,
     parts: plan.jobs.length,

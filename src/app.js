@@ -148,6 +148,11 @@ export function start() {
       else res.end();
     });
   });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') console.error(`\nPort ${config.port} is already in use. Stop the other program, or set PORT=3001 in .env and start again.\n`);
+    else console.error(err);
+    process.exit(1);
+  });
   server.listen(config.port, () => {
     console.log(`\nCaseBrief is running at http://localhost:${config.port}`);
     console.log(`  Clio: ${clio.clioConfigured() ? `connected (${config.clio.baseUrl})` : 'not connected yet'}`);

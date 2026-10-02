@@ -55,9 +55,12 @@ export function sharePage(m, { proposal, shares, status, mode = 'review' }) {
   const caseItems = proposal.items.filter((i) => i.group === 'case');
   const ownItems = proposal.items.filter((i) => i.group === 'own');
   const mine = shares.filter((s) => s.provider_key === p.key);
+  // A link is a frozen snapshot. If the brief has been rewritten since, say so, so the attorney can re-share.
+  const current = new Set(proposal.items.map((i) => `${i.label}|${i.text}`));
+  const drift = (s) => (s.snapshot.items || []).filter((i) => !current.has(`${i.label}|${i.text}`)).length;
   const history = mine.length
     ? `<h3>Links sent to this provider</h3><div class="links">${mine
-        .map((s) => `<div class="linkrow"><div><strong>Link ending …${esc(s.hint || '')}</strong> ${pill(cap(s.state), s.state === 'live' ? 'good' : 'neutral')}<div class="muted small">${plural(s.snapshot.items?.length || 0, 'item')} shared ${date(s.created_at, 'always')} · expires ${date(s.expires_at, 'always')}</div><div class="small ${s.opens.length ? 'good-text' : 'warn-text'}">${s.opens.length ? `Opened ${s.opens.length}×, last <time class="localtime" datetime="${esc(s.opens[0].opened_at)}">${esc(s.opens[0].opened_at)}</time>` : 'Not opened yet'}</div></div>${s.state === 'live' ? `<button type="button" class="btn btn-quiet revoke" data-id="${s.id}">Revoke</button>` : ''}</div>`)
+        .map((s) => `<div class="linkrow"><div><strong>Link ending …${esc(s.hint || '')}</strong> ${pill(cap(s.state), s.state === 'live' ? 'good' : 'neutral')}<div class="muted small">${plural(s.snapshot.items?.length || 0, 'item')} shared ${date(s.created_at, 'always')} · expires ${date(s.expires_at, 'always')}</div><div class="small ${s.opens.length ? 'good-text' : 'warn-text'}">${s.opens.length ? `Opened ${s.opens.length}×, last <time class="localtime" datetime="${esc(s.opens[0].opened_at)}">${esc(s.opens[0].opened_at)}</time>` : 'Not opened yet'}</div>${s.state === 'live' && drift(s) ? `<div class="small warn-text">The file has moved since this was shared: ${plural(drift(s), 'item')} would read differently now. Create a new link to send the current version.</div>` : ''}</div>${s.state === 'live' ? `<button type="button" class="btn btn-quiet revoke" data-id="${s.id}">Revoke</button>` : ''}</div>`)
         .join('')}</div>`
     : '';
 

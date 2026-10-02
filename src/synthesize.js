@@ -6,7 +6,7 @@
 import { config } from './config.js';
 import { all, get, run, now, parseJson } from './db.js';
 import { callTool } from './llm.js';
-import { matterContext, CATEGORIES } from './extract.js';
+import { matterContext, CATEGORIES, rosterId } from './extract.js';
 import { daysBetween, today, truncate, isoDate, clamp } from './util.js';
 
 const REGIONS = ['head', 'neck', 'chest', 'upper_back', 'lower_back', 'abdomen', 'left_shoulder', 'right_shoulder', 'left_arm', 'right_arm', 'left_hand', 'right_hand', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_leg', 'right_leg', 'left_ankle', 'right_ankle', 'whole_body', 'other'];
@@ -254,12 +254,16 @@ const list = (v, max) => (Array.isArray(v) ? v.slice(0, max).filter((x) => x && 
 
 function citeIds(value, valid) {
   const out = [];
-  for (const c of Array.isArray(value) ? value : []) {
-    const id = Number.parseInt(String(c).replace(/^f/i, ''), 10);
+  const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[\s,;]+/) : [];
+  for (const c of raw) {
+    const id = Number.parseInt(String(c).replace(/[^0-9]/g, ''), 10);
     if (valid.has(id) && !out.includes(id)) out.push(id);
   }
   return out.slice(0, 6);
 }
+
+/** An entry ref however the model wrote it, e.g. "note:123" inside brackets or with trailing text. */
+const entryRef = (v) => /(note|comm|doc|task|event|activity):[0-9A-Za-z_-]+/.exec(String(v ?? ''))?.[0] || null;
 
 function cleanCase(raw, valid, refs) {
   const c = (o) => citeIds(o?.cites, valid);
@@ -284,7 +288,7 @@ function cleanCase(raw, valid, refs) {
     waiting_on: list(raw.waiting_on, 8).map((x) => ({ what: s(x.what, 160), who: s(x.who, 100), since: d(x.since), attempts: n(x.attempts), cites: c(x) })).filter((x) => x.what),
     conflicts: list(raw.conflicts, 10).map((x) => ({ title: s(x.title, 120), detail: s(x.detail, 500), severity: pick(x.severity, ['high', 'medium', 'low'], 'medium'), cites: c(x) })).filter((x) => x.title && x.cites.length),
     pitch: list(raw.pitch, 8).map((x) => ({ text: s(x.text, 400), cites: c(x) })).filter((x) => x.text),
-    top_entries: list(raw.top_entries, 10).map((x) => ({ ref: s(x.ref, 60), why: s(x.why, 160), category: pick(x.category, CATEGORIES, 'admin') })).filter((x) => x.ref && refs.has(x.ref)),
+    top_entries: list(raw.top_entries, 10).map((x) => ({ ref: entryRef(x.ref), why: s(x.why, 160), category: pick(x.category, CATEGORIES, 'admin') })).filter((x) => x.ref && refs.has(x.ref)),
     sharing: list(raw.sharing, 14).map((x) => ({ topic: pick(x.topic, SHARE_TOPICS, 'other'), label: s(x.label, 60), text: s(x.text, 400), decision: pick(x.decision, ['share', 'withhold'], 'withhold'), reason: s(x.reason, 200), cites: c(x) })).filter((x) => x.label && x.text),
   };
 }
@@ -293,7 +297,7 @@ function cleanProviders(raw, valid, rosterIds) {
   const seen = new Set();
   return list(raw.providers, 40)
     .map((p) => {
-      const ids = (Array.isArray(p.contact_ids) ? p.contact_ids : []).map(String).filter((id) => rosterIds.has(id) && !seen.has(id));
+      const ids = (Array.isArray(p.contact_ids) ? p.contact_ids : [p.contact_ids]).map((id) => rosterId(id, rosterIds)).filter((id) => id && !seen.has(id));
       ids.forEach((id) => seen.add(id));
       return {
         contact_ids: ids,

@@ -50,8 +50,9 @@ function deadlineBox(d, next) {
 function header(m) {
   const photo = m.client?.photo;
   const initials = (m.client?.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('');
+  // With a face box from the digest the photo is cropped to the face. Before that, show the ID as it is.
   const avatar = photo
-    ? `<button type="button" class="avatar avatar-photo" data-source="${photo.source}" title="Open the photo ID" style="background-image:url('${photo.url}');${photo.crop ? `background-size:${photo.crop.size};background-position:${photo.crop.position}` : 'background-size:cover;background-position:center'}"></button>`
+    ? `<button type="button" class="avatar ${photo.crop ? 'avatar-photo' : 'avatar-card'}" data-source="${photo.source}" title="Open the photo ID" style="background-image:url('${photo.url}');${photo.crop ? `background-size:${photo.crop.size};background-position:${photo.crop.position}` : ''}"></button>`
     : `<div class="avatar">${esc(initials)}</div>`;
   const facts = [m.caseType && cap(m.caseType), m.incident?.location, m.incident?.date && `Date of loss ${date(m.incident.date, 'always')}`, m.caseAgeMonths != null && `Case age ${m.caseAgeMonths} months`].filter(Boolean);
   const lc = m.lastContact.spoken || m.lastContact.any;
@@ -172,6 +173,12 @@ function conflicts(m) {
   </section>`;
 }
 
+/** Where the last-visit date comes from: the page of the record that documents it, when there is one. */
+function lastVisitChip(p) {
+  const v = p.documented?.visits?.find((x) => x.date === p.last_visit);
+  return v ? ` <button type="button" class="chip" data-source="${v.source}" data-page="${v.page}" title="Open the record of this visit">P.${v.page}</button>` : '';
+}
+
 function providers(m) {
   if (!m.providers.length) return '';
   const order = { treating: 0, procedure_pending: 1, not_started: 2, unknown: 3, finished: 4 };
@@ -197,7 +204,7 @@ function providers(m) {
           return `<tr data-status="${order[p.treatment_status] ?? 9}" data-billed="${p.billed || 0}" data-visit="${esc(p.last_visit || '')}" data-records="${recOrder}">
             <td><strong>${esc(p.name)}</strong><div class="muted small">${esc(p.role || '')} ${chips(p.chips)}</div></td>
             <td>${pill(st, stTone)}<div class="muted small">${esc(p.status_note || '')}</div>${p.big_gap ? `<div class="small warn-text" title="From the visit dates in the records on file">Gap of ${p.big_gap.days} days, ${date(p.big_gap.from, 'always')} to ${date(p.big_gap.to, 'always')}</div>` : ''}</td>
-            <td>${p.last_visit ? `<span class="nowrap">${date(p.last_visit, 'always')}</span>` : '<span class="muted">—</span>'}${p.documented ? `<div class="muted small">${plural(p.documented.count, 'visit')} in the records</div>` : ''}</td>
+            <td>${p.last_visit ? `<span class="nowrap">${date(p.last_visit, 'always')}</span>${lastVisitChip(p)}` : '<span class="muted">—</span>'}${p.documented ? `<div class="muted small">${plural(p.documented.count, 'visit')} in the records</div>` : ''}</td>
             <td><span class="rec rec-${rcTone}">${esc(rc)}</span><div class="muted small">${esc(p.records_note || '')}</div>${p.records_stale ? `<div class="small warn-text">On file only through ${date(p.records_through, 'always')}</div>` : ''}</td>
             <td class="num"><strong>${p.billed != null ? usd(p.billed) : '—'}</strong><div class="chips">${(p.bill_chips || []).map(chip).join('')}</div></td>
             <td>${esc(p.paid_by || '—')}</td>
