@@ -167,6 +167,8 @@ button.row-bad:hover { background: #fbdcd8; border-color: #efb1aa; }
 .table th { text-align: left; font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); padding: 6px 10px; }
 .table td { padding: 11px 10px; border-top: 1px solid var(--line); vertical-align: top; }
 .table .num { text-align: right; white-space: nowrap; }
+.table td.num .chips { display: flex; justify-content: flex-end; margin-top: 4px; }
+.nowrap { white-space: nowrap; }
 .table tfoot td { border-top: 1px solid var(--line-strong); }
 .rec { font-weight: 650; font-size: 13px; }
 .rec-good { color: var(--good); }
@@ -174,6 +176,20 @@ button.row-bad:hover { background: #fbdcd8; border-color: #efb1aa; }
 .rec-bad { color: var(--bad); }
 .rec-neutral { color: var(--ink-2); }
 
+.visits { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.visits svg { width: 100%; height: auto; display: block; }
+.vs-name { font: 12.5px var(--sans); fill: var(--ink); }
+.vs-label { font: 10.5px var(--sans); fill: var(--ink-3); }
+.vs-base { stroke: #e6e9ef; stroke-width: 1; }
+.vs-year { stroke: #eef0f3; stroke-width: 1; }
+.vs-tick { fill: var(--accent); cursor: pointer; }
+.vs-tick:hover { fill: #0c1322; }
+.vs-gap { fill: #f6c768; fill-opacity: 0.55; }
+.vs-dark { fill: #e5484d; fill-opacity: 0.16; stroke: #e5484d; stroke-opacity: 0.35; stroke-dasharray: 3 3; }
+.key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+.key-tick { width: 3px; background: var(--accent); }
+.key-gap { background: #f6c768; }
+.key-dark { background: rgba(229, 72, 77, 0.25); border: 1px dashed rgba(229, 72, 77, 0.6); }
 .pitch { font-size: 15px; line-height: 1.75; }
 
 /* entries */

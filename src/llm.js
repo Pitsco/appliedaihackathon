@@ -37,19 +37,25 @@ let pausedUntil = 0;
 const backoff = (attempt) => Math.min(60_000, 2000 * 2 ** attempt) + Math.floor(Math.random() * 800);
 
 function record({ step, model, usage, started, ok, error }) {
-  const input = (usage?.input_tokens || 0) + (usage?.cache_creation_input_tokens || 0) + (usage?.cache_read_input_tokens || 0);
+  const fresh = usage?.input_tokens || 0;
+  const cacheWrite = usage?.cache_creation_input_tokens || 0;
+  const cacheRead = usage?.cache_read_input_tokens || 0;
   const output = usage?.output_tokens || 0;
+  // Cached input is billed differently: writing a cache entry costs a quarter more, reading one a tenth.
+  const billable = fresh + cacheWrite * 1.25 + cacheRead * 0.1;
   run(
     'INSERT INTO llm_calls (run_id, matter_id, step, model, input_tokens, output_tokens, cost_usd, duration_ms, ok, error, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    context.runId, context.matterId, step, model, input, output, costOf(model, input, output), Date.now() - started, ok ? 1 : 0, error || null, now(),
+    context.runId, context.matterId, step, model, fresh + cacheWrite + cacheRead, output, costOf(model, billable, output), Date.now() - started, ok ? 1 : 0, error || null, now(),
   );
 }
 
 /**
  * Ask the model to fill in `tool.input_schema`. Returns the parsed object.
  * `content` is the user turn: a string, or an array of content blocks (text, document, image).
+ * `system` is a string or an array of text blocks. `tools` lets several calls share one tool list
+ * (and so one prompt cache) while each is forced to answer with its own `tool`.
  */
-export async function callTool({ step, model, system, content, tool, maxTokens = 8000 }) {
+export async function callTool({ step, model, system, content, tool, tools = null, maxTokens = 8000 }) {
   await acquire();
   const started = Date.now();
   try {
@@ -58,7 +64,7 @@ export async function callTool({ step, model, system, content, tool, maxTokens =
       max_tokens: maxTokens,
       system,
       messages: [{ role: 'user', content }],
-      tools: [tool],
+      tools: tools || [tool],
       tool_choice: { type: 'tool', name: tool.name },
     });
     let last = null;

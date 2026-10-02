@@ -210,7 +210,7 @@ export async function buildBrief(matterId, { since } = {}) {
     const key = p.contact_ids[0];
     const clio = p.contact_ids.map((id) => billsByContact.get(id)).filter(Boolean);
     const visits = p.contact_ids.map((id) => stats.get(id)).filter(Boolean);
-    const documented = visits.length ? { count: visits.reduce((a, v) => a + v.count, 0), first: visits.map((v) => v.first).sort()[0], last: visits.map((v) => v.last).sort().pop(), gaps: visits.flatMap((v) => v.gaps).sort((a, b) => b.days - a.days) } : null;
+    const documented = visits.length ? { count: visits.reduce((a, v) => a + v.count, 0), first: visits.map((v) => v.first).sort()[0], last: visits.map((v) => v.last).sort().pop(), gaps: visits.flatMap((v) => v.gaps).sort((a, b) => b.days - a.days), visits: visits.flatMap((v) => [...v.where.entries()].map(([date, w]) => ({ date, source: w.source_id, page: w.page }))).sort((a, b) => a.date.localeCompare(b.date)) } : null;
     const lastVisit = [p.last_visit, documented?.last].filter(Boolean).sort().pop() || null;
     const share = shareRows.find((s) => s.provider_key === key) || null;
     return {

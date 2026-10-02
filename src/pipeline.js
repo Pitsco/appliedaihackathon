@@ -117,7 +117,8 @@ export async function runSync({ rebuild = false, pullOnly = false } = {}) {
     const changed = entries.length + documents.length > 0;
     if (changed || !brief || brief.partial || rebuild) {
       phase('brief', 'Writing the brief');
-      await synthesize(matterId, { partial: false });
+      const written = await synthesize(matterId, { partial: false });
+      state.warnings.push(...(written?.warnings || []));
     }
 
     const failed = all("SELECT COUNT(*) AS n FROM source_items WHERE matter_id = ? AND removed_at IS NULL AND digest_error IS NOT NULL", matterId)[0].n;

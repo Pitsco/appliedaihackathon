@@ -36,7 +36,7 @@ In the order the trial lawyers we interviewed said they look:
 4. **Needs attention.** Overdue, coming up, and waiting on someone else.
 5. **Since you last opened.** What changed since this person's last visit.
 6. **Where the file disagrees with itself.** Contradictions between entries, plus arithmetic checks.
-7. **Treatment and bills.** One row per provider: still treating or not, last visit, records status, amount billed, whether a link was shared and opened. Sortable.
+7. **Treatment and bills.** One row per provider: still treating or not, last visit, records status, amount billed, whether a link was shared and opened. Sortable. Below it, a timeline with one tick per visit found in the records, so gaps in treatment and stretches with no records stand out. Click a tick to open that visit's page.
 8. **The pitch.** The case in sixty seconds.
 9. **The ten entries that matter**, with the full timeline one click behind.
 
@@ -65,6 +65,7 @@ Clio Manage API (GET only)
       ▼
 3. Write     src/synthesize.js        (larger model)
              Sees the fact ledger only, never raw documents. Must cite fact ids.
+             Three short calls (brief, analysis, provider table) share one cached ledger.
       ▼
 4. Show      src/brief.js, src/views/*
              Resolves every cite to a source chip. Adds what plain code can compute.

@@ -72,6 +72,18 @@ const CASE_TOOL = {
         cites,
       }),
     },
+    pitch: {
+      type: 'array',
+      description: 'The case as you would tell it aloud to a colleague in sixty seconds: five to seven sentences covering what happened, who is on the other side, the injuries, the money, where it stands, the biggest risk and the next move.',
+      items: obj({ text: str('One sentence.'), cites }),
+    },
+  }),
+};
+
+const ANALYSIS_TOOL = {
+  name: 'write_case_analysis',
+  description: 'Write the analysis that sits beside the brief: what is outstanding, where the file contradicts itself, which entries to read, and what a provider may be told.',
+  input_schema: obj({
     waiting_on: {
       type: 'array',
       description: 'Things the firm is waiting for from someone outside the firm, most pressing first. At most 8.',
@@ -81,11 +93,6 @@ const CASE_TOOL = {
       type: 'array',
       description: 'Places where the file disagrees with itself: two entries stating different facts, numbers or dates, an account that changed, a record that contradicts a statement. Most serious first. At most 10. Cite both sides.',
       items: obj({ title: str('At most 9 words.'), detail: str('What each side says, at most 45 words.'), severity: { type: 'string', enum: ['high', 'medium', 'low'] }, cites }),
-    },
-    pitch: {
-      type: 'array',
-      description: 'The case as you would tell it aloud to a colleague in sixty seconds: five to seven sentences covering what happened, who is on the other side, the injuries, the money, where it stands, the biggest risk and the next move.',
-      items: obj({ text: str('One sentence.'), cites }),
     },
     top_entries: {
       type: 'array',
@@ -319,40 +326,46 @@ export async function synthesize(matterId, { partial = false } = {}) {
   const rosterIds = new Set(ctx.people.map((p) => p.id));
   const stats = visitStats(matterId);
   const visitLines = [...stats.entries()].map(([id, v]) => `[${id}] ${v.count} visits documented, first ${v.first}, last ${v.last}${v.gaps.length ? `; gaps over 30 days: ${v.gaps.map((g) => `${g.from} to ${g.to} (${g.days} days)`).join(', ')}` : ''}`);
-  const work = `<open_work>\n${openWork(matterId) || 'none'}\n</open_work>`;
-  const omitted = (b) => (b.omitted ? `\n(${b.omitted} lower-priority facts were left out of this ledger to keep it short. They remain in the file.)` : '');
-  // The provider table only needs the medical, billing and records side of the file.
-  const medical = ledger(matterId, ctx.people, { types: ['party', 'injury', 'procedure', 'treatment', 'bill', 'records', 'payer', 'lien', 'client_contact', 'expert', 'matter'], budget: Math.round(config.ai.ledgerChars * 0.6) });
-  const partialNote = partial ? '\n\nNote: the documents are still being read. This first brief rests on notes, emails, tasks and expenses only.' : '';
+  const omitted = book.omitted ? `\n(${book.omitted} lower-priority facts were left out of this ledger to keep it short. They remain in the file.)` : '';
 
-  const [caseRaw, providerRaw] = await Promise.all([
-    callTool({
-      step: 'brief:case',
-      model: config.ai.synthModel,
-      system: SYSTEM,
-      content: `${ctx.text}\n\n<ledger>\n${book.text}\n</ledger>${omitted(book)}\n\n${work}\n\n<entries>\n${entries.text}\n</entries>${partialNote}\n\nWrite the brief.`,
-      tool: CASE_TOOL,
-      maxTokens: 8000,
-    }),
-    callTool({
-      step: 'brief:providers',
-      model: config.ai.synthModel,
-      system: SYSTEM,
-      content: `${ctx.text}\n\n<ledger>\n${medical.text}\n</ledger>${omitted(medical)}\n\n${work}\n\n<visits_counted_from_records>\n${visitLines.join('\n') || 'none yet'}\n</visits_counted_from_records>${partialNote}\n\nWrite the provider table. Use the visit counts above for last visits where they are later than what the notes say.`,
-      tool: PROVIDER_TOOL,
-      maxTokens: 5000,
-    }),
+  // All three calls share one system prompt: the instructions, then the case material. The
+  // material is marked cacheable, so the second and third calls reuse it instead of paying
+  // for (and being rate limited on) the same ledger three times.
+  const material = `${ctx.text}\n\n<ledger>\n${book.text}\n</ledger>${omitted}\n\n<open_work>\n${openWork(matterId) || 'none'}\n</open_work>\n\n<entries>\n${entries.text}\n</entries>\n\n<visits_counted_from_records>\n${visitLines.join('\n') || 'none yet'}\n</visits_counted_from_records>${partial ? '\n\nNote: the documents are still being read. This first brief rests on notes, emails, tasks and expenses only.' : ''}`;
+  const system = [
+    { type: 'text', text: SYSTEM },
+    { type: 'text', text: material, cache_control: { type: 'ephemeral' } },
+  ];
+  const tools = [CASE_TOOL, ANALYSIS_TOOL, PROVIDER_TOOL];
+  const ask = (step, tool, content, maxTokens) => callTool({ step, model: config.ai.synthModel, system, content, tool, tools, maxTokens });
+
+  // The core brief first (it also warms the cache), then the other two side by side.
+  const caseRaw = await ask('brief:case', CASE_TOOL, 'Write the brief.', 6000);
+  const [analysis, providers] = await Promise.allSettled([
+    ask('brief:analysis', ANALYSIS_TOOL, 'Write the analysis: what the firm is waiting on, where the file disagrees with itself, the ten entries to read first, and what a treating provider may be told.', 6000),
+    ask('brief:providers', PROVIDER_TOOL, 'Write the provider table. Use the visit counts for last visits where they are later than what the notes say.', 5000),
   ]);
+  const warnings = [];
+  for (const [name, result] of [['analysis', analysis], ['provider table', providers]]) {
+    if (result.status === 'fulfilled') continue;
+    if (result.reason?.kind === 'auth') throw result.reason;
+    warnings.push(`The ${name} could not be written (${result.reason?.message || 'unknown error'}). Sync again to retry.`);
+  }
 
   const brief = {
-    case: cleanCase(caseRaw, book.ids, entries.refs),
-    providers: cleanProviders(providerRaw, medical.ids, rosterIds),
+    case: cleanCase({ ...caseRaw, ...(analysis.status === 'fulfilled' ? analysis.value : {}) }, book.ids, entries.refs),
+    providers: providers.status === 'fulfilled' ? cleanProviders(providers.value, book.ids, rosterIds) : [],
     facts_used: book.count,
     facts_omitted: book.omitted,
+    warnings,
   };
+  // A failed part keeps what an earlier brief had, so one bad call never empties the page.
+  const previous = loadBrief(matterId);
+  if (previous && analysis.status !== 'fulfilled') for (const k of ['waiting_on', 'conflicts', 'top_entries', 'sharing']) brief.case[k] = previous.case?.[k] || [];
+  if (previous && providers.status !== 'fulfilled') brief.providers = previous.providers || [];
   run(
     'INSERT INTO briefs (matter_id, json, partial, generated_at, model) VALUES (?,?,?,?,?) ON CONFLICT (matter_id) DO UPDATE SET json = excluded.json, partial = excluded.partial, generated_at = excluded.generated_at, model = excluded.model',
-    matterId, JSON.stringify(brief), partial ? 1 : 0, now(), config.ai.synthModel,
+    matterId, JSON.stringify(brief), partial || warnings.length ? 1 : 0, now(), config.ai.synthModel,
   );
   return brief;
 }

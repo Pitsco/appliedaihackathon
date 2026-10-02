@@ -2,6 +2,7 @@
 // the filing deadline, then fault / damages / coverage, then money, then what to do.
 import { esc, usd, usdShort, date, ago, until, chip, chips, listChip, pill, plural, cap, bodyDiagram, KIND_LABEL } from './ui.js';
 import { page } from './layout.js';
+import { daysBetween } from '../util.js';
 
 const TONE = {
   fault: { clear: ['Clear', 'good'], contested: ['Contested', 'warn'], weak: ['Weak', 'bad'], unknown: ['Not established', 'neutral'] },
@@ -196,7 +197,7 @@ function providers(m) {
           return `<tr data-status="${order[p.treatment_status] ?? 9}" data-billed="${p.billed || 0}" data-visit="${esc(p.last_visit || '')}" data-records="${recOrder}">
             <td><strong>${esc(p.name)}</strong><div class="muted small">${esc(p.role || '')} ${chips(p.chips)}</div></td>
             <td>${pill(st, stTone)}<div class="muted small">${esc(p.status_note || '')}</div>${p.big_gap ? `<div class="small warn-text" title="From the visit dates in the records on file">Gap of ${p.big_gap.days} days, ${date(p.big_gap.from, 'always')} to ${date(p.big_gap.to, 'always')}</div>` : ''}</td>
-            <td>${p.last_visit ? date(p.last_visit, 'always') : '<span class="muted">—</span>'}${p.documented ? `<div class="muted small">${plural(p.documented.count, 'visit')} in the records</div>` : ''}</td>
+            <td>${p.last_visit ? `<span class="nowrap">${date(p.last_visit, 'always')}</span>` : '<span class="muted">—</span>'}${p.documented ? `<div class="muted small">${plural(p.documented.count, 'visit')} in the records</div>` : ''}</td>
             <td><span class="rec rec-${rcTone}">${esc(rc)}</span><div class="muted small">${esc(p.records_note || '')}</div>${p.records_stale ? `<div class="small warn-text">On file only through ${date(p.records_through, 'always')}</div>` : ''}</td>
             <td class="num"><strong>${p.billed != null ? usd(p.billed) : '—'}</strong><div class="chips">${(p.bill_chips || []).map(chip).join('')}</div></td>
             <td>${esc(p.paid_by || '—')}</td>
@@ -206,7 +207,43 @@ function providers(m) {
         .join('')}</tbody>
       <tfoot><tr><td colspan="4"><strong>Total · ${plural(rows.length, 'provider')}</strong></td><td class="num"><strong>${usd(total)}</strong></td><td colspan="2" class="muted small">${m.money.bills.stated != null ? `File states ${usd(m.money.bills.stated)}` : ''}</td></tr></tfoot>
     </table></div>
+    ${visitStrip(m)}
   </section>`;
+}
+
+/** One line per provider, one tick per visit found in the records. Gaps and undocumented stretches stand out. */
+function visitStrip(m) {
+  const rows = m.providers.filter((p) => p.documented?.visits?.length);
+  if (!rows.length) return '';
+  const start = [m.incident?.date, ...rows.map((p) => p.documented.first)].filter(Boolean).sort()[0];
+  const span = Math.max(1, daysBetween(start, m.today));
+  const W = 1000;
+  const L = 250;
+  const R = 16;
+  const rowH = 24;
+  const top = 24;
+  const H = top + rows.length * rowH + 6;
+  const x = (d) => (L + ((W - L - R) * Math.max(0, Math.min(span, daysBetween(start, d)))) / span).toFixed(1);
+  const years = [];
+  for (let y = Number(start.slice(0, 4)) + 1; y <= Number(m.today.slice(0, 4)); y++) years.push(y);
+  const lines = rows
+    .map((p, i) => {
+      const y = top + i * rowH;
+      const open = ['treating', 'procedure_pending'].includes(p.treatment_status);
+      const gaps = p.documented.count >= 8 ? p.documented.gaps.map((g) => `<rect class="vs-gap" x="${x(g.from)}" y="${y + 3}" width="${Math.max(2, x(g.to) - x(g.from)).toFixed(1)}" height="14"><title>No visit for ${g.days} days, ${g.from} to ${g.to}</title></rect>`).join('') : '';
+      const dark = open && daysBetween(p.documented.last, m.today) > 60 ? `<rect class="vs-dark" x="${x(p.documented.last)}" y="${y + 3}" width="${(x(m.today) - x(p.documented.last)).toFixed(1)}" height="14"><title>Still treating, but no records since ${p.documented.last}</title></rect>` : '';
+      const ticks = p.documented.visits.map((v) => `<rect class="vs-tick" x="${x(v.date)}" y="${y + 3}" width="2" height="14" data-source="${v.source}" data-page="${v.page}"><title>${v.date}</title></rect>`).join('');
+      return `<text class="vs-name" x="0" y="${y + 14}">${esc(p.name.length > 36 ? `${p.name.slice(0, 35)}…` : p.name)}</text><line class="vs-base" x1="${L}" x2="${W - R}" y1="${y + 10}" y2="${y + 10}"/>${gaps}${dark}${ticks}`;
+    })
+    .join('');
+  return `<div class="visits">
+    <div class="card-top"><h3>Visits in the records</h3><span class="muted small"><span class="key key-tick"></span>a visit <span class="key key-gap"></span>gap over 30 days <span class="key key-dark"></span>still treating, no records held</span></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Visits per provider over time, from the dates in the medical records">
+      ${years.map((y) => `<line class="vs-year" x1="${x(`${y}-01-01`)}" x2="${x(`${y}-01-01`)}" y1="14" y2="${H}"/><text class="vs-label" x="${x(`${y}-01-01`)}" y="10" text-anchor="middle">${y}</text>`).join('')}
+      <text class="vs-label" x="${L}" y="10">${m.incident?.date ? 'Date of loss' : ''}</text><text class="vs-label" x="${W - R}" y="10" text-anchor="end">Today</text>
+      ${lines}
+    </svg>
+  </div>`;
 }
 
 function pitch(m) {
