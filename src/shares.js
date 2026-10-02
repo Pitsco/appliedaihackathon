@@ -17,6 +17,9 @@ export function shareProposal(model, providerKey) {
   const p = model.providers.find((x) => x.key === providerKey);
   if (!p) return null;
   const items = model.sharing.map((x, i) => ({ key: `case-${i}`, group: 'case', topic: x.topic, label: x.label, text: x.text, decision: x.decision, reason: x.reason, chips: x.chips, by: 'ai' }));
+  // A provider's first question is whether there is money behind the case, so coverage and payment lead.
+  const lead = { coverage: 0, payment: 1, status: 2, stage: 3 };
+  items.sort((x, y) => (lead[x.topic] ?? 9) - (lead[y.topic] ?? 9));
 
   // The provider's own slice of the file. These are built from their own row, so no other provider's data can leak in.
   const own = (key, topic, label, text, reason, chips = []) => items.push({ key, group: 'own', topic, label, text, decision: 'share', reason, chips, by: 'rule' });

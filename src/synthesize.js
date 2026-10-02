@@ -34,7 +34,7 @@ const CASE_TOOL = {
     incident: obj({ date: nullable('string', 'Date of the injury event, YYYY-MM-DD.'), location: nullable('string', 'Where it happened, short.'), summary: str('What happened, one neutral sentence of at most 28 words.'), cites }),
     stage_track: {
       type: 'array',
-      description: 'Five to seven stages for a case like this one, in order from intake to resolution, in the words lawyers use. Mark every stage done, current or upcoming. Exactly one is current.',
+      description: 'Five to seven stages for a case like this one, in order from intake to resolution, in the words lawyers use (say "Pre-litigation", never "Pre-suit"). Mark every stage done, current or upcoming. Exactly one is current.',
       items: obj({ label: str('One or two words.'), state: { type: 'string', enum: ['done', 'current', 'upcoming'] } }),
     },
     status: obj({ line: str('Where the case stands today, one sentence of at most 20 words.'), detail: str('One more sentence: what is holding it there, or what happens next.'), cites }),

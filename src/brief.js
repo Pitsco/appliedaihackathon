@@ -279,9 +279,17 @@ export async function buildBrief(matterId, { since } = {}) {
   const incidentDate = c?.incident?.date || null;
   const anchor = incidentDate || matterRow.date;
 
+  // Age and payer come straight from Clio contacts, never from the model.
+  const dobRow = client ? get("SELECT body FROM source_items WHERE matter_id = ? AND kind = 'contact' AND clio_id = ? AND removed_at IS NULL", matterId, String(client.id)) : null;
+  const dob = /Date of birth: (\d{4}-\d{2}-\d{2})/.exec(dobRow?.body || '')?.[1] || null;
+  const clientAge = dob ? Math.floor(daysBetween(dob, t) / 365.25) : null;
+  const payers = people.filter((p) => !p.is_client && /insur|adjust|carrier|claims/i.test(p.relationship || '')).map((p) => ({ name: p.name, role: p.relationship }));
+
   return {
     matterId,
     today: t,
+    clientAge,
+    payers,
     matter: { number: meta.display_number, description: meta.description, status: meta.status, practice_area: meta.practice_area, stage: meta.stage, opened: matterRow.date, sol: meta.sol, chip: itemChip(matterRow) },
     client: client ? { ...client, photo: await clientPhoto(matterId) } : null,
     firmUser: getSetting('firm_user'),

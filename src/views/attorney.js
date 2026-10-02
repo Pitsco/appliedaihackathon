@@ -14,6 +14,9 @@ const TONE = {
 };
 const tone = (group, key) => TONE[group][key] || TONE[group].unknown;
 
+/** The firm says "pre-litigation", whatever the model or Clio calls the stage. */
+const stageLabel = (label) => cap(String(label || '').replace(/pre[-\s]?suit/i, 'pre-litigation'));
+
 function deadlineBox(d, next) {
   let t = 'neutral';
   let big = 'Not in the file';
@@ -59,16 +62,15 @@ function header(m) {
   const lcTone = !lc ? 'neutral' : lc.days > 30 ? 'bad' : lc.days > 14 ? 'warn' : 'neutral';
   const od = m.attention.overdue.length;
   const track = m.stageTrack.length
-    ? `<ol class="track">${m.stageTrack.map((s) => `<li class="track-${s.state}"><span class="track-bar"></span><span class="track-label">${esc(s.label)}${s.state === 'current' ? ' · now' : ''}</span></li>`).join('')}</ol>`
+    ? `<ol class="track">${m.stageTrack.map((s) => `<li class="track-${s.state}"><span class="track-bar"></span><span class="track-label">${esc(stageLabel(s.label))}${s.state === 'current' ? ' · now' : ''}</span></li>`).join('')}</ol>`
     : '';
   return `<section class="card head">
     <div class="head-row">
       <div class="head-who">
         ${avatar}
         <div>
-          <h1>${esc(m.client?.name || m.matter.description || 'Matter')}</h1>
+          <h1>${esc(m.client?.name || m.matter.description || 'Matter')}${m.clientAge != null ? `<span class="age">, ${m.clientAge}</span>` : ''}</h1>
           <p class="muted">${facts.map((f) => (typeof f === 'string' ? esc(f) : f)).join(' · ')} ${chips(m.incident?.chips)}</p>
-          <p class="muted small">Clio matter ${esc(m.matter.number || m.matterId)}${m.matter.status ? ` · ${esc(m.matter.status)}` : ''}${m.incident?.summary ? ` · ${esc(m.incident.summary)}` : ''}</p>
         </div>
       </div>
       <div class="head-stats">
@@ -86,9 +88,8 @@ function header(m) {
         </a>
       </div>
     </div>
-    ${inBrief(m)}
     ${track}
-    ${m.status ? `<p class="status"><strong>${esc(m.status.line)}</strong> <span class="muted">${esc(m.status.detail || '')}</span> ${chips(m.status.chips)}</p>` : ''}
+    ${inBrief(m)}
   </section>`;
 }
 
@@ -120,6 +121,48 @@ function testRow(m) {
   </section>`;
 }
 
+/** The one-screen answer: what is hurt, who pays, how much. Names and numbers only; the reasoning is folded below. */
+function glance(m) {
+  if (!m.test) return '';
+  const { coverage, damages, fault } = m.test;
+  const $ = m.money;
+  const injury = (i) => `<li><strong>${esc(i.name)}</strong> ${i.status ? `<span class="tag">${esc(i.status)}</span>` : ''} ${chips(i.chips?.slice(0, 1))}</li>`;
+  const first = m.injuries.slice(0, 4);
+  const rest = m.injuries.slice(4);
+  const [dText, dTone] = tone('damages', damages.status);
+  const [cText, cTone] = tone('coverage', coverage.status);
+  const [fText, fTone] = tone('fault', fault.status);
+  const value = $.value ? ($.value.amount != null ? usdShort($.value.amount) : $.value.low != null && $.value.high != null ? `${usdShort($.value.low)}–${usdShort($.value.high)}` : '—') : '—';
+  const line = (label, big, extra = '') => `<div class="kv"><dt>${label}</dt><dd>${big}${extra}</dd></div>`;
+  return `<section class="grid glance">
+    <article class="card">
+      <div class="test-top"><span class="eyebrow">Injuries</span>${pill(dText, dTone)}</div>
+      <div class="injuries">${bodyDiagram(m.injuries)}<div><ol class="injury-list tight">${first.map(injury).join('')}</ol>${rest.length ? `<details class="more"><summary>${rest.length} more</summary><ol class="injury-list tight" start="${first.length + 1}">${rest.map(injury).join('')}</ol></details>` : ''}</div></div>
+    </article>
+    <article class="card">
+      <div class="test-top"><span class="eyebrow">Who pays</span>${pill(cText, cTone)}</div>
+      ${m.payers.length ? `<p class="payer">${esc(m.payers[0].name)}</p><p class="muted small">${esc(m.payers[0].role || '')}${m.payers.length > 1 ? ` · and ${esc(m.payers.slice(1).map((p) => p.name).join(', '))}` : ''}</p>` : ''}
+      <p class="${m.payers.length ? 'small' : 'payer'}">${esc(coverage.headline || '')} ${chips(coverage.chips?.slice(0, 1))}</p>
+      <div class="test-top fault-line"><span class="eyebrow">Fault</span>${pill(fText, fTone)}</div>
+      <p class="small">${esc(fault.headline || '')} ${chips(fault.chips?.slice(0, 1))}</p>
+    </article>
+    <article class="card">
+      <div class="test-top"><span class="eyebrow">Money</span></div>
+      <dl class="kvs">
+        ${line('Case value', value)}
+        ${$.cap != null ? line('Policy limit', usdShort($.cap)) : ''}
+        ${line('Medical bills', usdShort($.bills.total))}
+        ${$.liens.length ? line('Liens', usdShort($.liensTotal)) : ''}
+        ${line('Firm has spent', usdShort($.firm.total))}
+        ${$.wage ? line('Wage loss', usdShort($.wage.amount)) : ''}
+      </dl>
+    </article>
+  </section>`;
+}
+
+/** Everything behind the first screen, closed until asked for. */
+const fold = (title, note, inner, id = '') => (inner ? `<details class="fold"${id ? ` id="${id}"` : ''}><summary><span>${title}</span><span class="muted small">${note}</span></summary><div class="fold-body">${inner}</div></details>` : '');
+
 function moneyRow(m) {
   const $ = m.money;
   const tiles = [];
@@ -137,7 +180,7 @@ function moneyRow(m) {
 
 function attention(m) {
   const a = m.attention;
-  const soon = a.upcoming.slice(0, 4);
+  const soon = a.upcoming.slice(0, 2);
   const waiting = (w) => `<div class="row row-quiet"><strong>${esc(w.what)}</strong><span class="small muted">${esc(w.who || '')}${w.since ? ` · since ${date(w.since)} (${w.days} days)` : ''}${w.attempts ? ` · asked ${w.attempts} times` : ''}</span>${chips(w.chips)}</div>`;
   return `<article class="card" id="attention">
     <h2>Needs attention</h2>
@@ -145,22 +188,23 @@ function attention(m) {
     ${a.overdue.map((x) => `<button type="button" class="row row-bad" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small">Due ${date(x.date)} · ${x.days} days late${x.who ? ` · ${esc(x.who)}` : ''}</span></button>`).join('') || '<p class="muted small">Nothing is past due.</p>'}
     <h4 class="group group-warn">Coming up · ${a.upcoming.length}</h4>
     ${soon.map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('') || '<p class="muted small">Nothing scheduled.</p>'}
-    ${a.upcoming.length > soon.length ? `<details class="more"><summary>${a.upcoming.length - soon.length} more coming up</summary>${a.upcoming.slice(4).map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('')}</details>` : ''}
-    ${a.waiting.length ? `<h4 class="group group-neutral">Waiting on others · ${a.waiting.length}</h4>${a.waiting.slice(0, 3).map(waiting).join('')}${a.waiting.length > 3 ? `<details class="more"><summary>${a.waiting.length - 3} more</summary>${a.waiting.slice(3).map(waiting).join('')}</details>` : ''}` : ''}
+    ${a.upcoming.length > soon.length ? `<details class="more"><summary>${a.upcoming.length - soon.length} more coming up</summary>${a.upcoming.slice(2).map((x) => `<button type="button" class="row" data-source="${x.chip.source}"><strong>${esc(x.title)}</strong><span class="small muted">${x.date ? `${date(x.date)} · ${until(x.days)}` : 'No date'} · ${x.type === 'event' ? 'calendar' : 'task'}</span></button>`).join('')}</details>` : ''}
+    ${a.waiting.length ? `<h4 class="group group-neutral">Waiting on others · ${a.waiting.length}</h4><details class="more"><summary>Show</summary>${a.waiting.map(waiting).join('')}</details>` : ''}
   </article>`;
 }
 
 function changes(m) {
   const ch = m.changes;
-  const shown = ch.items.slice(0, 8);
+  const shown = ch.items.slice(0, 4);
   const option = (v, label) => `<option value="${v}"${ch.choice === v ? ' selected' : ''}>${label}</option>`;
   const tag = { new: ['New', 'accent'], changed: ['Edited', 'warn'], late: ['Late', 'bad'] };
+  const changeRow = (x) => `<button type="button" class="change" data-source="${x.chip.source}">${pill(tag[x.tag][0], tag[x.tag][1])}<span class="change-text">${esc(x.text)}</span><span class="muted small">${date(x.date)}</span></button>`;
   return `<article class="card">
     <div class="card-top"><h2>${esc(ch.label)} <span class="muted">· ${plural(ch.items.length, 'change')}</span></h2>
       <select id="since" class="select" aria-label="Period">${option('last', 'Since last opened')}${option('7d', 'Last 7 days')}${option('30d', 'Last 30 days')}${option('90d', 'Last 90 days')}</select></div>
     ${ch.firstVisit ? '<p class="muted small">No earlier visit on record, so this shows the last 14 days.</p>' : ''}
-    ${shown.map((x) => `<button type="button" class="change" data-source="${x.chip.source}">${pill(tag[x.tag][0], tag[x.tag][1])}<span class="change-text">${esc(x.text)}</span><span class="muted small">${date(x.date)}</span></button>`).join('') || '<p class="muted">Nothing has changed in this period.</p>'}
-    ${ch.items.length > shown.length ? `<p class="muted small">and ${ch.items.length - shown.length} more, in the timeline below</p>` : ''}
+    ${shown.map(changeRow).join('') || '<p class="muted">Nothing has changed in this period.</p>'}
+    ${ch.items.length > shown.length ? `<details class="more"><summary>${ch.items.length - shown.length} more</summary>${ch.items.slice(4).map(changeRow).join('')}</details>` : ''}
   </article>`;
 }
 
@@ -259,13 +303,13 @@ function visitStrip(m) {
  * Open on a first visit or after a week away; folded to one line for someone who was here recently.
  */
 function inBrief(m) {
-  if (!m.pitch.length) return '';
-  const last = m.changes?.previous;
-  const open = !last || daysBetween(last.slice(0, 10), today()) >= 7;
-  return `<details class="inbrief"${open ? ' open' : ''}>
-    <summary><span class="eyebrow">Case in brief</span><span class="muted small inbrief-hint">${m.pitch.length} sentences · about a minute to read</span></summary>
-    <p class="pitch">${m.pitch.map((p) => `${esc(p.text)} ${chips(p.chips)}`).join(' ')}</p>
-  </details>`;
+  if (!m.pitch.length) return m.status ? `<p class="status"><strong>${esc(m.status.line)}</strong> ${chips(m.status.chips)}</p>` : '';
+  const say = (list) => list.map((p) => `${esc(p.text)} ${chips(p.chips?.slice(0, 1))}`).join(' ');
+  const rest = m.pitch.slice(2);
+  return `<div class="inbrief">
+    <p class="pitch">${say(m.pitch.slice(0, 2))}</p>
+    ${rest.length ? `<details class="more"><summary>Read the full brief · ${rest.length} more sentences</summary><p class="pitch">${say(rest)}</p></details>` : ''}
+  </div>`;
 }
 
 function offers(m) {
@@ -281,7 +325,7 @@ function entries(m) {
       <span class="tag">${esc(cap(e.category || KIND_LABEL[e.kind] || ''))}</span>
     </button>`;
   const kinds = [...new Set(m.timeline.map((e) => e.kind))];
-  return `<section class="card" id="entries">
+  return `<section class="card">
     <div class="card-top"><h2>The ${m.top.length} entries that matter <span class="muted">· of ${m.timeline.length}</span></h2>
       <div class="seg" role="tablist"><button type="button" class="seg-btn is-active" data-show="top">Top ${m.top.length}</button><button type="button" class="seg-btn" data-show="all">Full timeline (${m.timeline.length})</button></div></div>
     <div id="entries-top">${m.top.map((e, i) => row(e, i, true)).join('') || '<p class="muted">Run the digest to rank the entries.</p>'}</div>
@@ -319,13 +363,14 @@ function banners(m, status) {
 export function attorneyPage(m, status) {
   const body = `${banners(m, status)}
   ${header(m)}
-  ${testRow(m)}
-  ${moneyRow(m)}
-  <section class="grid two">${attention(m)}${changes(m)}</section>
-  ${conflicts(m)}
-  ${providers(m)}
-  ${offers(m)}
-  ${entries(m)}
+  ${glance(m)}
+  <section class="grid two">${changes(m)}${attention(m)}</section>
+  ${fold('Does the case hold up?', 'fault, damages and coverage, with the reasoning', testRow(m))}
+  ${fold('Money in detail', 'where each figure comes from', moneyRow(m))}
+  ${fold('Where the file disagrees with itself', plural(m.conflicts.length, 'conflict'), conflicts(m))}
+  ${fold('Treatment and bills', plural(m.providers.length, 'provider'), providers(m))}
+  ${fold('Demands and offers', plural(m.money.offers.length, 'entry', 'entries'), offers(m))}
+  ${fold(`The ${m.top.length} entries that matter`, `and the full timeline of ${m.timeline.length}`, entries(m), 'entries')}
   ${footer(m)}`;
   return page({ title: m.client?.name || 'Brief', active: 'brief', body, model: m, status });
 }
